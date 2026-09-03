@@ -1,0 +1,55 @@
+name: F1 schedule
+
+on:
+  schedule:
+    # Израиль летом UTC+3, зимой UTC+2, поэтому ловим оба варианта:
+    # 07-09 UTC — понедельничный анонс (10:00 IL), 16-18 UTC — напоминание (19:00 IL).
+    # Лишние запуски безвредны: бот сам решает, наступил ли момент.
+    - cron: '0 7,8,9,16,17,18 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Ничего не отправлять, только показать в логе'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: f1-schedule
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install --quiet tzdata
+
+      - name: Run bot
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python bot.py --dry-run
+          else
+            python bot.py
+          fi
+
+      - name: Save state
+        run: |
+          if ! git diff --quiet -- state.json; then
+            git config user.name  'f1-drocheduler'
+            git config user.email 'actions@github.com'
+            git add state.json
+            git commit -m 'state: отмечены отправленные сообщения'
+            git push
+          fi

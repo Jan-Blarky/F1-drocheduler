@@ -1,0 +1,44 @@
+"""Минимальный клиент Telegram Bot API на стандартной библиотеке."""
+
+import json
+import os
+import urllib.request
+
+API = "https://api.telegram.org/bot{token}/{method}"
+
+
+class Telegram:
+    def __init__(self, token=None, chat_id=None, dry_run=False):
+        self.token = token or os.environ.get("TG_BOT_TOKEN", "")
+        self.chat_id = chat_id or os.environ.get("TG_CHAT_ID", "")
+        self.dry_run = dry_run
+        if not dry_run and not (self.token and self.chat_id):
+            raise SystemExit("Не заданы TG_BOT_TOKEN / TG_CHAT_ID")
+
+    def _call(self, method, **params):
+        if self.dry_run:
+            print(f"[dry-run] {method}({', '.join(f'{k}={v!r}' for k, v in params.items() if k != 'text')})")
+            return {"message_id": 0}
+        body = json.dumps({"chat_id": self.chat_id, **params}).encode()
+        req = urllib.request.Request(
+            API.format(token=self.token, method=method),
+            data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            payload = json.load(r)
+        if not payload.get("ok"):
+            raise RuntimeError(f"Telegram {method}: {payload}")
+        return payload["result"]
+
+    def send(self, text, pin=False):
+        if self.dry_run:
+            print("\n" + "-" * 60 + f"\n{text}\n" + "-" * 60)
+        result = self._call("sendMessage", text=text, parse_mode="HTML",
+                            disable_web_page_preview=True)
+        if pin:
+            # без звука: уведомление о самом сообщении уже пришло
+            self._call("pinChatMessage", message_id=result["message_id"],
+                       disable_notification=True)
+        return result["message_id"]
+
+    def unpin_all(self):
+        self._call("unpinAllChatMessages")
