@@ -16,6 +16,11 @@ on:
           - dry-run   # показать в логе, что бот сделал бы сейчас
           - check     # проверить доступ к группе и право на закреп
           - send      # обычный боевой запуск
+          - announce  # отправить и закрепить анонс этапа из поля round
+      round:
+        description: 'Номер этапа для режима announce'
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -41,11 +46,13 @@ jobs:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           MODE: ${{ github.event.inputs.mode }}
+          ROUND: ${{ github.event.inputs.round }}
         run: |
           case "$MODE" in
-            check)   python bot.py --check ;;
-            dry-run) python bot.py --dry-run ;;
-            *)       python bot.py ;;
+            check)    python bot.py --check ;;
+            dry-run)  python bot.py --dry-run ;;
+            announce) python bot.py --force-announce "$ROUND" ;;
+            *)        python bot.py ;;
           esac
 
       - name: Save state
