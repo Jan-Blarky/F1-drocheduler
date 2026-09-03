@@ -49,6 +49,9 @@ def main():
     ap.add_argument("--now", help="подменить текущее время, ISO (для тестов)")
     ap.add_argument("--preview", metavar="РАУНД", type=int,
                     help="показать оба сообщения для этапа и выйти")
+    ap.add_argument("--force-announce", metavar="РАУНД", type=int,
+                    help="отправить анонс этапа прямо сейчас, минуя расписание "
+                         "и не отмечая его в state (для проверки прав на закреп)")
     args = ap.parse_args()
 
     now = (datetime.datetime.fromisoformat(args.now).replace(tzinfo=ISRAEL)
@@ -65,8 +68,17 @@ def main():
         print(render.announce(wk), "\n\n", render.remind(wk), sep="")
         return 0
 
-    state = load_state()
     tg = Telegram(dry_run=args.dry_run)
+
+    if args.force_announce:
+        wk = next((w for w in weekends if w["round"] == args.force_announce), None)
+        if not wk:
+            sys.exit(f"Нет этапа {args.force_announce} в сезоне {now.year}")
+        print(f"Принудительный анонс этапа {wk['round']} ({wk['event']})")
+        tg.send(render.announce(wk), pin=True)
+        return 0
+
+    state = load_state()
     sent = []
 
     for wk in weekends:

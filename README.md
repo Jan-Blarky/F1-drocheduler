@@ -45,6 +45,10 @@ JSON-календари проекта [sportstimes/f1](https://github.com/sport
 python3 bot.py --preview 14              # показать сообщения для этапа 14
 python3 bot.py --dry-run                 # что бот сделал бы прямо сейчас
 python3 bot.py --dry-run --now 2026-09-07T10:00   # ...в заданный момент
+
+# боевая проверка прав на закреп: реально шлёт и пинит анонс этапа,
+# расписание и state при этом не трогаются
+TG_BOT_TOKEN=... TG_CHAT_ID=... python3 bot.py --force-announce 15
 ```
 
 Боевой запуск читает `TG_BOT_TOKEN` и `TG_CHAT_ID` из окружения.
