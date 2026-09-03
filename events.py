@@ -1,10 +1,16 @@
-"""Названия трасс и их таймзоны.
+"""Названия этапов, трасс и таймзоны.
 
-Название этапа НЕ придумываем — берём как есть из источника (там уже учтены
-переносы и странности вроде «Bahrain Grand Prix (Malaysia)»). Единственное,
-чего в источнике нет, — официальные имена трасс и их таймзоны: в JSON только
-город, а координаты местами битые (у Майами широта 0).
+Название этапа — официальное, как на formula1.com, со спонсорским титулом:
+«FORMULA 1 MSC CRUISES GRANDE PRÊMIO DE SÃO PAULO 2026». В календарных JSON
+такого нет, поэтому названия лежат в event_names.json и обновляются раз в
+сезон скриптом fetch_names.py. Своего мы не выдумываем.
+
+Имён трасс и таймзон нет ни там, ни там: в JSON только город, а координаты
+местами битые (у Майами широта 0) — поэтому они заданы здесь.
 """
+
+import json
+import pathlib
 
 # location из JSON -> (официальное название трассы, IANA-таймзона)
 CIRCUITS = {
@@ -40,12 +46,25 @@ CIRCUITS = {
 }
 
 
-def event_name(race):
-    """Название этапа из источника. В данных оно бывает и полным
-    («Bahrain Grand Prix (Malaysia)»), и коротким («Italian») — во втором
-    случае дописываем Grand Prix и больше ничего не меняем."""
-    name = race["name"].strip()
-    return name if "grand prix" in name.lower() else f"{name} Grand Prix"
+NAMES_FILE = pathlib.Path(__file__).with_name("event_names.json")
+try:
+    OFFICIAL_NAMES = json.loads(NAMES_FILE.read_text())
+except FileNotFoundError:
+    OFFICIAL_NAMES = {}
+
+
+def event_name(race, year, rnd):
+    """Официальное название этапа. Если сезон ещё не выкачан fetch_names.py,
+    берём короткое имя из календаря, чтобы бот не молчал, и просим обновить."""
+    name = OFFICIAL_NAMES.get(str(year), {}).get(str(rnd))
+    if name:
+        return name
+    fallback = race["name"].strip()
+    if "grand prix" not in fallback.lower():
+        fallback += " Grand Prix"
+    print(f"WARNING: нет официального названия для {year} этап {rnd}, "
+          f"использую {fallback!r} — запусти fetch_names.py {year}")
+    return fallback
 
 
 def circuit(race):

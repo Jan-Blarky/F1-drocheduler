@@ -54,7 +54,7 @@ def load_weekends(year):
                     wk[s] = jr
                     break
         circuit, tz = events.circuit(race)
-        wk["event"] = events.event_name(race)
+        wk["event"] = events.event_name(race, year, race["round"])
         wk["circuit"] = circuit
         wk["tz"] = ZoneInfo(tz)
         wk["gp_utc"] = parse_ts(race["sessions"]["gp"])
@@ -64,14 +64,14 @@ def load_weekends(year):
 
 
 def announce_at(weekend):
-    """Понедельник 10:00 по Израилю той недели, на которой проходит гонка.
+    """Понедельник 06:00 по Израилю той недели, на которой проходит гонка.
 
     Гонка бывает и в субботу (Баку-2026), поэтому отсчитываем от понедельника
     недели, а не «минус шесть дней от гонки».
     """
     race_day = weekend["gp_il"].date()
     monday = race_day - datetime.timedelta(days=race_day.weekday())
-    return datetime.datetime.combine(monday, datetime.time(10, 0), ISRAEL)
+    return datetime.datetime.combine(monday, datetime.time(6, 0), ISRAEL)
 
 
 def remind_at(weekend):
@@ -83,10 +83,10 @@ def remind_at(weekend):
 
 
 def offseason_at(weekends):
-    """Понедельник 10:00 по Израилю на следующей неделе после финального этапа."""
+    """Понедельник 06:00 по Израилю на следующей неделе после финального этапа."""
     last = max(w["gp_il"] for w in weekends).date()
     monday = last - datetime.timedelta(days=last.weekday()) + datetime.timedelta(days=7)
-    return datetime.datetime.combine(monday, datetime.time(10, 0), ISRAEL)
+    return datetime.datetime.combine(monday, datetime.time(6, 0), ISRAEL)
 
 
 def first_race_of(year):
@@ -95,4 +95,5 @@ def first_race_of(year):
     if not races:
         return None
     race = min(races, key=lambda r: r["sessions"]["gp"])
-    return parse_ts(race["sessions"]["gp"]).astimezone(ISRAEL), events.event_name(race)
+    return (parse_ts(race["sessions"]["gp"]).astimezone(ISRAEL),
+            events.event_name(race, year, race["round"]))
