@@ -42,3 +42,31 @@ class Telegram:
 
     def unpin_all(self):
         self._call("unpinAllChatMessages")
+
+
+def find_chats(token=None):
+    """Печатает чаты, из которых бот недавно получал апдейты, — так проще
+    всего узнать chat_id группы, не разбирая JSON руками."""
+    token = token or os.environ.get("TG_BOT_TOKEN", "")
+    if not token:
+        raise SystemExit("Не задан TG_BOT_TOKEN")
+    with urllib.request.urlopen(API.format(token=token, method="getUpdates"), timeout=30) as r:
+        payload = json.load(r)
+    if not payload.get("ok"):
+        raise SystemExit(f"Telegram getUpdates: {payload}")
+
+    chats = {}
+    for update in payload["result"]:
+        for value in update.values():
+            if isinstance(value, dict) and "chat" in value:
+                chat = value["chat"]
+                chats[chat["id"]] = chat
+    if not chats:
+        print("Апдейтов нет. Добавь бота в группу и напиши в ней что-нибудь "
+              "(например /start), потом запусти снова.")
+        return
+    print("Найденные чаты:")
+    for chat_id, chat in chats.items():
+        title = chat.get("title") or chat.get("username") or chat.get("first_name", "")
+        print(f"  {chat_id}   {chat.get('type')}   {title}")
+    print("\nВ TG_CHAT_ID нужен id группы — отрицательное число.")

@@ -1,88 +1,59 @@
-"""Официальные названия этапов и трасс + таймзоны трасс.
+"""Названия трасс и их таймзоны.
 
-Названия в исходных данных (sportstimes/f1) ненадёжны — там встречаются
-обрывки вроде "Bahrain Grand Prix (Malaysia)". Поэтому названия берём
-только отсюда, а из JSON — исключительно времена сессий.
+Название этапа НЕ придумываем — берём как есть из источника (там уже учтены
+переносы и странности вроде «Bahrain Grand Prix (Malaysia)»). Единственное,
+чего в источнике нет, — официальные имена трасс и их таймзоны: в JSON только
+город, а координаты местами битые (у Майами широта 0).
 """
 
-# location из JSON -> IANA-таймзона трассы
-CIRCUIT_TZ = {
-    "Melbourne": "Australia/Melbourne",
-    "Shanghai": "Asia/Shanghai",
-    "Suzuka": "Asia/Tokyo",
-    "Miami": "America/New_York",
-    "Montreal": "America/Toronto",
-    "Monte Carlo": "Europe/Monaco",
-    "Barcelona": "Europe/Madrid",
-    "Madrid": "Europe/Madrid",
-    "Spielberg": "Europe/Vienna",
-    "Silverstone": "Europe/London",
-    "Spa-Francorchamps": "Europe/Brussels",
-    "Budapest": "Europe/Budapest",
-    "Zandvoort": "Europe/Amsterdam",
-    "Monza": "Europe/Rome",
-    "Imola": "Europe/Rome",
-    "Baku": "Asia/Baku",
-    "Sepang": "Asia/Kuala_Lumpur",
-    "Singapore": "Asia/Singapore",
-    "Austin": "America/Chicago",
-    "Mexico City": "America/Mexico_City",
-    "Sao Paulo": "America/Sao_Paulo",
-    "Las Vegas": "America/Los_Angeles",
-    "Doha": "Asia/Qatar",
-    "Lusail": "Asia/Qatar",
-    "Yas Marina": "Asia/Dubai",
-    "Jeddah": "Asia/Riyadh",
-    "Sakhir": "Asia/Bahrain",
-    "Portimao": "Europe/Lisbon",
-    "Le Castellet": "Europe/Paris",
-}
-
-# (год, раунд) -> (официальное название этапа, официальное название трассы)
-EVENTS = {
-    2026: {
-        1:  ("Australian Grand Prix",           "Albert Park Circuit"),
-        2:  ("Chinese Grand Prix",              "Shanghai International Circuit"),
-        3:  ("Japanese Grand Prix",             "Suzuka International Racing Course"),
-        4:  ("Miami Grand Prix",                "Miami International Autodrome"),
-        5:  ("Canadian Grand Prix",             "Circuit Gilles-Villeneuve"),
-        6:  ("Monaco Grand Prix",               "Circuit de Monaco"),
-        7:  ("Barcelona-Catalunya Grand Prix",  "Circuit de Barcelona-Catalunya"),
-        8:  ("Austrian Grand Prix",             "Red Bull Ring"),
-        9:  ("British Grand Prix",              "Silverstone Circuit"),
-        10: ("Belgian Grand Prix",              "Circuit de Spa-Francorchamps"),
-        11: ("Hungarian Grand Prix",            "Hungaroring"),
-        12: ("Dutch Grand Prix",                "Circuit Zandvoort"),
-        13: ("Italian Grand Prix",              "Autodromo Nazionale Monza"),
-        14: ("Spanish Grand Prix",              "Madring"),
-        15: ("Azerbaijan Grand Prix",           "Baku City Circuit"),
-        # TODO: подтвердить официальное название 16-го этапа (перенос в Сепанг).
-        16: ("Malaysian Grand Prix",            "Sepang International Circuit"),
-        17: ("Singapore Grand Prix",            "Marina Bay Street Circuit"),
-        18: ("United States Grand Prix",        "Circuit of the Americas"),
-        19: ("Mexico City Grand Prix",          "Autodromo Hermanos Rodriguez"),
-        20: ("Sao Paulo Grand Prix",            "Autodromo Jose Carlos Pace"),
-        21: ("Las Vegas Grand Prix",            "Las Vegas Strip Circuit"),
-        22: ("Qatar Grand Prix",                "Lusail International Circuit"),
-        23: ("Abu Dhabi Grand Prix",            "Yas Marina Circuit"),
-    },
+# location из JSON -> (официальное название трассы, IANA-таймзона)
+CIRCUITS = {
+    "Melbourne":         ("Albert Park Circuit",               "Australia/Melbourne"),
+    "Shanghai":          ("Shanghai International Circuit",    "Asia/Shanghai"),
+    "Suzuka":            ("Suzuka International Racing Course","Asia/Tokyo"),
+    "Miami":             ("Miami International Autodrome",     "America/New_York"),
+    "Montreal":          ("Circuit Gilles-Villeneuve",         "America/Toronto"),
+    "Monte Carlo":       ("Circuit de Monaco",                 "Europe/Monaco"),
+    "Barcelona":         ("Circuit de Barcelona-Catalunya",    "Europe/Madrid"),
+    "Madrid":            ("Madring",                           "Europe/Madrid"),
+    "Spielberg":         ("Red Bull Ring",                     "Europe/Vienna"),
+    "Silverstone":       ("Silverstone Circuit",               "Europe/London"),
+    "Spa-Francorchamps": ("Circuit de Spa-Francorchamps",      "Europe/Brussels"),
+    "Budapest":          ("Hungaroring",                       "Europe/Budapest"),
+    "Zandvoort":         ("Circuit Zandvoort",                 "Europe/Amsterdam"),
+    "Monza":             ("Autodromo Nazionale Monza",         "Europe/Rome"),
+    "Imola":             ("Autodromo Enzo e Dino Ferrari",     "Europe/Rome"),
+    "Baku":              ("Baku City Circuit",                 "Asia/Baku"),
+    "Sepang":            ("Sepang International Circuit",      "Asia/Kuala_Lumpur"),
+    "Singapore":         ("Marina Bay Street Circuit",         "Asia/Singapore"),
+    "Austin":            ("Circuit of the Americas",           "America/Chicago"),
+    "Mexico City":       ("Autodromo Hermanos Rodriguez",      "America/Mexico_City"),
+    "Sao Paulo":         ("Autodromo Jose Carlos Pace",        "America/Sao_Paulo"),
+    "Las Vegas":         ("Las Vegas Strip Circuit",           "America/Los_Angeles"),
+    "Doha":              ("Lusail International Circuit",      "Asia/Qatar"),
+    "Lusail":            ("Lusail International Circuit",      "Asia/Qatar"),
+    "Yas Marina":        ("Yas Marina Circuit",                "Asia/Dubai"),
+    "Jeddah":            ("Jeddah Corniche Circuit",           "Asia/Riyadh"),
+    "Sakhir":            ("Bahrain International Circuit",     "Asia/Bahrain"),
+    "Portimao":          ("Autodromo Internacional do Algarve","Europe/Lisbon"),
+    "Le Castellet":      ("Circuit Paul Ricard",               "Europe/Paris"),
 }
 
 
-def event_names(year, rnd, race):
-    """Официальные названия. Если раунд ещё не занесён в EVENTS — падаем на
-    данные источника и громко пишем в лог, чтобы это заметили в Actions."""
-    try:
-        return EVENTS[year][rnd]
-    except KeyError:
-        fallback = (f'{race["name"]} Grand Prix', race["location"])
-        print(f"WARNING: нет названий для {year} этап {rnd}, использую {fallback}")
-        return fallback
+def event_name(race):
+    """Название этапа из источника. В данных оно бывает и полным
+    («Bahrain Grand Prix (Malaysia)»), и коротким («Italian») — во втором
+    случае дописываем Grand Prix и больше ничего не меняем."""
+    name = race["name"].strip()
+    return name if "grand prix" in name.lower() else f"{name} Grand Prix"
 
 
-def circuit_tz(race):
+def circuit(race):
+    """(название трассы, таймзона). Незнакомая трасса не роняет бота:
+    подставляем город из источника и пишем WARNING в лог Actions."""
     loc = race["location"]
-    if loc not in CIRCUIT_TZ:
-        print(f"WARNING: нет таймзоны для трассы {loc!r}, использую UTC")
-        return "UTC"
-    return CIRCUIT_TZ[loc]
+    if loc not in CIRCUITS:
+        print(f"WARNING: трасса {loc!r} не заведена в events.CIRCUITS, "
+              f"использую город и UTC")
+        return loc, "UTC"
+    return CIRCUITS[loc]

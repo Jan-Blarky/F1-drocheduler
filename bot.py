@@ -23,7 +23,7 @@ import sys
 import f1data
 import render
 from f1data import ISRAEL
-from tg import Telegram
+from tg import Telegram, find_chats
 
 STATE_FILE = pathlib.Path(__file__).with_name("state.json")
 
@@ -49,10 +49,16 @@ def main():
     ap.add_argument("--now", help="подменить текущее время, ISO (для тестов)")
     ap.add_argument("--preview", metavar="РАУНД", type=int,
                     help="показать оба сообщения для этапа и выйти")
+    ap.add_argument("--find-chat-id", action="store_true",
+                    help="показать chat_id чатов, где есть бот (нужен только токен)")
     ap.add_argument("--force-announce", metavar="РАУНД", type=int,
                     help="отправить анонс этапа прямо сейчас, минуя расписание "
                          "и не отмечая его в state (для проверки прав на закреп)")
     args = ap.parse_args()
+
+    if args.find_chat_id:
+        find_chats()
+        return 0
 
     now = (datetime.datetime.fromisoformat(args.now).replace(tzinfo=ISRAEL)
            if args.now else datetime.datetime.now(ISRAEL))

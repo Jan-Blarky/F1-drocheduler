@@ -53,10 +53,10 @@ def load_weekends(year):
                 if _session_dates(jr) & days:
                     wk[s] = jr
                     break
-        event, circuit = events.event_names(year, race["round"], race)
-        wk["event"] = event
+        circuit, tz = events.circuit(race)
+        wk["event"] = events.event_name(race)
         wk["circuit"] = circuit
-        wk["tz"] = ZoneInfo(events.circuit_tz(race))
+        wk["tz"] = ZoneInfo(tz)
         wk["gp_utc"] = parse_ts(race["sessions"]["gp"])
         wk["gp_il"] = wk["gp_utc"].astimezone(ISRAEL)
         weekends.append(wk)
@@ -95,5 +95,4 @@ def first_race_of(year):
     if not races:
         return None
     race = min(races, key=lambda r: r["sessions"]["gp"])
-    event, _ = events.event_names(year, race["round"], race)
-    return parse_ts(race["sessions"]["gp"]).astimezone(ISRAEL), event
+    return parse_ts(race["sessions"]["gp"]).astimezone(ISRAEL), events.event_name(race)
