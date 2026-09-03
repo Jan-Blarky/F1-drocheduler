@@ -17,6 +17,7 @@ on:
           - check     # проверить доступ к группе и право на закреп
           - send      # обычный боевой запуск
           - announce  # отправить и закрепить анонс этапа из поля round
+          - test-pin  # прогнать цикл закрепа на одноразовом сообщении
       round:
         description: 'Номер этапа для режима announce'
         type: string
@@ -52,6 +53,7 @@ jobs:
             check)    python bot.py --check ;;
             dry-run)  python bot.py --dry-run ;;
             announce) python bot.py --force-announce "$ROUND" ;;
+            test-pin) python bot.py --test-pin ;;
             *)        python bot.py ;;
           esac
 

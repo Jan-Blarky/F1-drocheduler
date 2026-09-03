@@ -50,7 +50,9 @@ python3 fetch_names.py 2027
 ## Настройка
 
 1. Бот создан через [@BotFather](https://t.me/BotFather), добавлен в группу
-   администратором с правом «Закреплять сообщения».
+   администратором с правами «Закрепление сообщений» и «Удаление сообщений».
+   Второе нужно, чтобы убирать служебную надпись «бот закрепил сообщение»,
+   которую Telegram добавляет в чат следом за каждым закрепом.
 2. В `Settings → Secrets and variables → Actions` заданы секреты:
    * `TG_BOT_TOKEN` — токен от BotFather;
    * `TG_CHAT_ID` — id группы (отрицательный, вида `-100…`).
@@ -59,6 +61,8 @@ python3 fetch_names.py 2027
 
 ```bash
 python3 bot.py --find-chat-id                # узнать chat_id группы (нужен TG_BOT_TOKEN)
+python3 bot.py --check                       # права бота в группе
+python3 bot.py --test-pin                    # цикл закрепа на одноразовом сообщении
 python3 bot.py --preview 14              # показать сообщения для этапа 14
 python3 bot.py --dry-run                 # что бот сделал бы прямо сейчас
 python3 bot.py --dry-run --now 2026-09-07T10:00   # ...в заданный момент

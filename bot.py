@@ -52,6 +52,9 @@ def main():
     ap.add_argument("--check", action="store_true",
                     help="проверить токен, доступ к группе и право на закреп, "
                          "ничего не отправляя")
+    ap.add_argument("--test-pin", action="store_true",
+                    help="прогнать полный цикл закрепа на одноразовом "
+                         "сообщении и убрать его за собой")
     ap.add_argument("--find-chat-id", action="store_true",
                     help="показать chat_id чатов, где есть бот (нужен только токен)")
     ap.add_argument("--force-announce", metavar="РАУНД", type=int,
@@ -61,6 +64,10 @@ def main():
 
     if args.find_chat_id:
         find_chats()
+        return 0
+
+    if args.test_pin:
+        Telegram(dry_run=args.dry_run).test_pin()
         return 0
 
     if args.check:
