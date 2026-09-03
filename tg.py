@@ -39,11 +39,12 @@ class Telegram:
     def _call(self, method, **params):
         return self._raw(method, chat_id=self.chat_id, **params)
 
-    def send(self, text, pin=False):
+    def send(self, text, pin=False, silent=False):
         if self.dry_run:
             print("\n" + "-" * 60 + f"\n{text}\n" + "-" * 60)
         result = self._call("sendMessage", text=text, parse_mode="HTML",
-                            disable_web_page_preview=True)
+                            disable_web_page_preview=True,
+                            disable_notification=silent)
         if pin:
             # без звука: уведомление о самом сообщении уже пришло
             self._call("pinChatMessage", message_id=result["message_id"],
@@ -122,7 +123,7 @@ class Telegram:
         убрать служебную надпись, открепить и удалить за собой. В чате остаётся
         только мелькнувшее сообщение."""
         message_id = self.send("🔧 Проверка закрепа — сообщение сейчас исчезнет.",
-                               pin=True)
+                               pin=True, silent=True)
         self._call("unpinChatMessage", message_id=message_id)
         self._raw("deleteMessage", chat_id=self.chat_id, message_id=message_id)
         print("Тестовое сообщение откреплено и удалено.")
