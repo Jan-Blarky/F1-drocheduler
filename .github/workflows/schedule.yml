@@ -8,10 +8,14 @@ on:
     - cron: '0 3,4,5,16,17,18 * * *'
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: 'Ничего не отправлять, только показать в логе'
-        type: boolean
-        default: true
+      mode:
+        description: 'Что сделать'
+        type: choice
+        default: dry-run
+        options:
+          - dry-run   # показать в логе, что бот сделал бы сейчас
+          - check     # проверить доступ к группе и право на закреп
+          - send      # обычный боевой запуск
 
 permissions:
   contents: write
@@ -24,9 +28,9 @@ jobs:
   run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -36,13 +40,13 @@ jobs:
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          MODE: ${{ github.event.inputs.mode }}
         run: |
-          if [ "$DRY_RUN" = "true" ]; then
-            python bot.py --dry-run
-          else
-            python bot.py
-          fi
+          case "$MODE" in
+            check)   python bot.py --check ;;
+            dry-run) python bot.py --dry-run ;;
+            *)       python bot.py ;;
+          esac
 
       - name: Save state
         run: |

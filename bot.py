@@ -49,6 +49,9 @@ def main():
     ap.add_argument("--now", help="подменить текущее время, ISO (для тестов)")
     ap.add_argument("--preview", metavar="РАУНД", type=int,
                     help="показать оба сообщения для этапа и выйти")
+    ap.add_argument("--check", action="store_true",
+                    help="проверить токен, доступ к группе и право на закреп, "
+                         "ничего не отправляя")
     ap.add_argument("--find-chat-id", action="store_true",
                     help="показать chat_id чатов, где есть бот (нужен только токен)")
     ap.add_argument("--force-announce", metavar="РАУНД", type=int,
@@ -58,6 +61,13 @@ def main():
 
     if args.find_chat_id:
         find_chats()
+        return 0
+
+    if args.check:
+        problem = Telegram().check()
+        if problem:
+            sys.exit(f"НЕ ГОТОВО: {problem}")
+        print("Всё на месте: бот админ группы и умеет закреплять.")
         return 0
 
     now = (datetime.datetime.fromisoformat(args.now).replace(tzinfo=ISRAEL)

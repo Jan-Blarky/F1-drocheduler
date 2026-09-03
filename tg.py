@@ -12,8 +12,14 @@ class Telegram:
         self.token = token or os.environ.get("TG_BOT_TOKEN", "")
         self.chat_id = chat_id or os.environ.get("TG_CHAT_ID", "")
         self.dry_run = dry_run
-        if not dry_run and not (self.token and self.chat_id):
-            raise SystemExit("Не заданы TG_BOT_TOKEN / TG_CHAT_ID")
+        missing = [name for name, value in
+                   (("TG_BOT_TOKEN", self.token), ("TG_CHAT_ID", self.chat_id))
+                   if not value]
+        if missing and not dry_run:
+            raise SystemExit(f"Не заданы {' / '.join(missing)}")
+        if missing:
+            print(f"WARNING: не заданы {' / '.join(missing)} — "
+                  f"в боевом запуске это была бы ошибка")
 
     def _call(self, method, **params):
         if self.dry_run:
@@ -39,6 +45,28 @@ class Telegram:
             self._call("pinChatMessage", message_id=result["message_id"],
                        disable_notification=True)
         return result["message_id"]
+
+    def check(self):
+        """Проверка боем без единого сообщения в группу: жив ли токен, виден
+        ли чат и выдано ли право на закреп."""
+        me = self._call("getMe")
+        print(f"Бот: @{me.get('username')} (id {me.get('id')})")
+
+        chat = self._call("getChat")
+        print(f"Чат: {chat.get('title')!r}, тип {chat.get('type')}, id {chat.get('id')}")
+
+        member = self._call("getChatMember", user_id=me["id"])
+        status = member.get("status")
+        can_pin = member.get("can_pin_messages")
+        print(f"Статус бота в чате: {status}, право на закреп: {can_pin}")
+
+        if status != "administrator":
+            return "Бот не администратор — закрепить сообщение не сможет"
+        if not can_pin:
+            return "У бота нет права «Закрепление сообщений»"
+        if chat.get("type") not in ("group", "supergroup"):
+            return f"Это не групповой чат, а {chat.get('type')}"
+        return None
 
     def unpin_all(self):
         self._call("unpinAllChatMessages")
