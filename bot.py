@@ -35,7 +35,7 @@ ANNOUNCE_WINDOW = datetime.timedelta(hours=12)
 # Реакция-переключатель совместного просмотра. Кастомная эмодзи из набора
 # t.me/addemoji/raceemoji опознаётся по custom_emoji_id (его печатает режим
 # --watch-reactions), обычная 🔴 — как запасной вариант для не-премиума.
-PARTY_CUSTOM_EMOJI = set()
+PARTY_CUSTOM_EMOJI = {"5465126501525527671"}
 PARTY_PLAIN_EMOJI = {"🔴"}
 
 
