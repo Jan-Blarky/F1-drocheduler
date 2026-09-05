@@ -63,6 +63,38 @@ python3 fetch_names.py 2027
 но её отсутствие бота не роняет — подставится город из источника и `WARNING`
 в лог Actions.
 
+## Чем запускается
+
+Расписания GitHub Actions выполняются «по возможности»: за трое суток
+наблюдений отработала примерно четверть слотов, с задержками до двух часов и
+схлопыванием соседних. Для сообщения, у которого назначено время, это не
+годится.
+
+Поэтому основной триггер вынесен наружу: Cloudflare Worker
+(`cloudflare/worker.js`) по своему крону дёргает `repository_dispatch`, а
+такие запуски стартуют мгновенно. Расписание в Actions оставлено страховкой —
+дубликатов оно не создаст.
+
+### Как поднять воркер
+
+1. В GitHub: **Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens**. Только этот репозиторий, единственное право —
+   **Contents: Read and write** (без него `repository_dispatch` отвечает 403).
+2. В Cloudflare: **Workers & Pages → Create → Worker**, вставить код из
+   `cloudflare/worker.js`, задеплоить.
+3. **Settings → Variables and Secrets** воркера: секрет `GITHUB_TOKEN` со
+   значением токена из шага 1.
+4. **Settings → Trigger Events → Cron Triggers**: добавить
+   `0 3,4,16,17 * * *`.
+
+Через CLI то же самое: `npx wrangler deploy` из каталога `cloudflare`,
+расписание уже прописано в `wrangler.toml`, токен — `npx wrangler secret put
+GITHUB_TOKEN`.
+
+Проверить связку можно, не дожидаясь крона: в дашборде воркера есть кнопка
+запуска по расписанию вручную, а в Actions должен появиться запуск с событием
+`repository_dispatch`.
+
 ## Настройка
 
 1. Бот создан через [@BotFather](https://t.me/BotFather), добавлен в группу
