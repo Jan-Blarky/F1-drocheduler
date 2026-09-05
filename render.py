@@ -93,10 +93,13 @@ def party_block():
             '🍿 Ништяки, вкусняшки и напитки приветствуются')
 
 
-def remind(weekend, party=False):
+def remind(weekend, party=False, now=None):
     israel = weekend["gp_il"]
     local = weekend["gp_utc"].astimezone(weekend["tz"])
-    text = (f'⏰ <b>Завтра гонка Ф1</b> — этап {weekend["round"]}, {weekend["event"]}.\n'
+    # Запуск может задержаться и переехать за полночь — тогда «завтра» врёт.
+    today = (now or datetime.datetime.now(ISRAEL)).date()
+    when = "Сегодня" if israel.date() == today else "Завтра"
+    text = (f'⏰ <b>{when} гонка Ф1</b> — этап {weekend["round"]}, {weekend["event"]}.\n'
             f'📍 {weekend["circuit"]}\n'
             f'Старт в <b>{israel:%H:%M}</b> по Израилю ({local:%H:%M} на трассе).')
     if party:
