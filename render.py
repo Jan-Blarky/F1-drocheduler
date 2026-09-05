@@ -1,6 +1,8 @@
 """Тексты сообщений. Разметка — HTML (parse_mode=HTML)."""
 
 import datetime
+import html
+import os
 
 from f1data import ISRAEL, parse_ts
 
@@ -73,12 +75,33 @@ def announce(weekend):
     return "\n".join(lines)
 
 
-def remind(weekend):
+def party_block():
+    """Блок про совместный просмотр. Адрес и ссылка на Waze лежат в секретах,
+    а не в репозитории: домашний адрес в git-истории — плохая идея."""
+    location = os.environ.get("JAN_LOCATION", "").strip()
+    waze = os.environ.get("JAN_WAZE", "").strip()
+    if not location:
+        print("WARNING: не задан JAN_LOCATION — блок про сходку пропущен")
+        return None
+
+    place = html.escape(location)
+    if waze:
+        place = f'<a href="{html.escape(waze, quote=True)}">{place}</a>'
+    return ('\n\n🏠 <b>Домашняя трибуна: у Жана</b>\n'
+            f'📍 {place}\n'
+            '🕓 Подтягивайтесь за 15–20 минут до старта\n'
+            '🍿 Ништяки, вкусняшки и напитки приветствуются')
+
+
+def remind(weekend, party=False):
     israel = weekend["gp_il"]
     local = weekend["gp_utc"].astimezone(weekend["tz"])
-    return (f'⏰ <b>Завтра гонка Ф1</b> — этап {weekend["round"]}, {weekend["event"]}.\n'
+    text = (f'⏰ <b>Завтра гонка Ф1</b> — этап {weekend["round"]}, {weekend["event"]}.\n'
             f'📍 {weekend["circuit"]}\n'
             f'Старт в <b>{israel:%H:%M}</b> по Израилю ({local:%H:%M} на трассе).')
+    if party:
+        text += party_block() or ""
+    return text
 
 
 def offseason(finished_year, next_year, first_race, today):

@@ -18,6 +18,9 @@ on:
           - send      # обычный боевой запуск
           - announce  # отправить и закрепить анонс этапа из поля round
           - test-pin  # прогнать цикл закрепа на одноразовом сообщении
+          - reactions # подождать реакции и показать их custom_emoji_id
+          - party-on  # включить сходку на этапе из поля round
+          - party-off # выключить сходку на этапе из поля round
       round:
         description: 'Номер этапа для режима announce'
         type: string
@@ -46,15 +49,20 @@ jobs:
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          JAN_LOCATION: ${{ secrets.JAN_LOCATION }}
+          JAN_WAZE: ${{ secrets.JAN_WAZE }}
           MODE: ${{ github.event.inputs.mode }}
           ROUND: ${{ github.event.inputs.round }}
         run: |
           case "$MODE" in
-            check)    python bot.py --check ;;
-            dry-run)  python bot.py --dry-run ;;
-            announce) python bot.py --force-announce "$ROUND" ;;
-            test-pin) python bot.py --test-pin ;;
-            *)        python bot.py ;;
+            check)     python bot.py --check ;;
+            dry-run)   python bot.py --dry-run ;;
+            announce)  python bot.py --force-announce "$ROUND" ;;
+            test-pin)  python bot.py --test-pin ;;
+            reactions) python bot.py --watch-reactions ;;
+            party-on)  python bot.py --party "$ROUND" ;;
+            party-off) python bot.py --no-party "$ROUND" ;;
+            *)         python bot.py ;;
           esac
 
       - name: Save state

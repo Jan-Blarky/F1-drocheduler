@@ -3,12 +3,14 @@
 
 Запускается по крону несколько раз в день и сам решает, пора ли что-то слать:
 
-  * анонс уикенда   — понедельник 10:00 по Израилю той недели, где гонка;
+  * анонс уикенда   — понедельник 06:00 по Израилю той недели, где гонка;
                       вешается в закреп и висит до конца сезона;
-  * напоминание     — 19:00 по Израилю накануне дня гонки Ф1;
+  * напоминание     — 19:00 по Израилю накануне дня гонки Ф1, при включённой
+                      сходке — с адресом, где смотрим вместе;
   * межсезонье      — после финального этапа: чистим закрепы и вешаем отсчёт
                       до первой гонки следующего сезона.
 
+Сходка включается реакцией владельца группы на анонс этапа (см. PARTY_EMOJI).
 Отправленное фиксируется в state.json, поэтому лишний запуск крона ничего не
 задублирует, а пропущенный (упавший раннер) догоняется на следующем запуске,
 пока не истекло окно.
@@ -30,6 +32,12 @@ STATE_FILE = pathlib.Path(__file__).with_name("state.json")
 # Сколько времени после расчётного момента ещё имеет смысл слать анонс.
 ANNOUNCE_WINDOW = datetime.timedelta(hours=12)
 
+# Реакция-переключатель совместного просмотра. Кастомная эмодзи из набора
+# t.me/addemoji/raceemoji опознаётся по custom_emoji_id (его печатает режим
+# --watch-reactions), обычная 🔴 — как запасной вариант для не-премиума.
+PARTY_CUSTOM_EMOJI = set()
+PARTY_PLAIN_EMOJI = {"🔴"}
+
 
 def load_state():
     try:
@@ -42,6 +50,64 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
 
 
+def is_party_reaction(reactions):
+    for reaction in reactions or []:
+        if reaction.get("type") == "custom_emoji":
+            if reaction.get("custom_emoji_id") in PARTY_CUSTOM_EMOJI:
+                return True
+        elif reaction.get("emoji") in PARTY_PLAIN_EMOJI:
+            return True
+    return False
+
+
+def announce_messages(state, year):
+    """message_id анонса -> номер этапа. Учитываются и штатные анонсы, и
+    отправленные вручную через --force-announce."""
+    result = {}
+    for key, value in state.items():
+        if not isinstance(value, dict) or "message_id" not in value:
+            continue
+        parts = key.split("-")
+        if len(parts) == 3 and parts[0] == str(year) and parts[2] in ("announce", "manual"):
+            result[value["message_id"]] = int(parts[1])
+    return result
+
+
+def handle_reaction(update, tg, state, year, messages):
+    """Реакция владельца группы на анонс включает и выключает сходку."""
+    reaction = update.get("message_reaction")
+    if not reaction:
+        return
+
+    user = reaction.get("user") or {}
+    old, new = reaction.get("old_reaction"), reaction.get("new_reaction")
+    message_id = reaction.get("message_id")
+    # печатаем всегда: так из лога Actions видно custom_emoji_id новой реакции
+    print(f"Реакция на сообщение {message_id} от {user.get('id')} "
+          f"({user.get('first_name')}): было {old}, стало {new}")
+
+    rnd = messages.get(message_id)
+    if rnd is None:
+        print("  — это не анонс этапа, пропускаем")
+        return
+    if not user:
+        print("  — реакция без автора (анонимный админ), пропускаем")
+        return
+
+    wants, wanted = is_party_reaction(new), is_party_reaction(old)
+    if wants == wanted:
+        print("  — реакция не про сходку, пропускаем")
+        return
+
+    status = tg.member_status(user["id"])
+    if status != "creator":
+        print(f"  — реакция не от владельца группы (статус {status}), пропускаем")
+        return
+
+    state[f"{year}-{rnd}-party"] = wants
+    print(f"  — сходка на этапе {rnd}: {'включена' if wants else 'выключена'}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
@@ -50,16 +116,20 @@ def main():
     ap.add_argument("--preview", metavar="РАУНД", type=int,
                     help="показать оба сообщения для этапа и выйти")
     ap.add_argument("--check", action="store_true",
-                    help="проверить токен, доступ к группе и право на закреп, "
-                         "ничего не отправляя")
+                    help="проверить токен, доступ к группе и права, ничего не отправляя")
     ap.add_argument("--test-pin", action="store_true",
-                    help="прогнать полный цикл закрепа на одноразовом "
-                         "сообщении и убрать его за собой")
+                    help="прогнать полный цикл закрепа на одноразовом сообщении")
     ap.add_argument("--find-chat-id", action="store_true",
                     help="показать chat_id чатов, где есть бот (нужен только токен)")
+    ap.add_argument("--watch-reactions", action="store_true",
+                    help="подождать реакции и напечатать их целиком, включая "
+                         "custom_emoji_id")
+    ap.add_argument("--party", metavar="РАУНД", type=int,
+                    help="включить сходку на этапе вручную")
+    ap.add_argument("--no-party", metavar="РАУНД", type=int,
+                    help="выключить сходку на этапе вручную")
     ap.add_argument("--force-announce", metavar="РАУНД", type=int,
-                    help="отправить анонс этапа прямо сейчас, минуя расписание "
-                         "и не отмечая его в state (для проверки прав на закреп)")
+                    help="отправить анонс этапа прямо сейчас, минуя расписание")
     args = ap.parse_args()
 
     if args.find_chat_id:
@@ -88,20 +158,46 @@ def main():
         wk = next((w for w in weekends if w["round"] == args.preview), None)
         if not wk:
             sys.exit(f"Нет этапа {args.preview} в сезоне {now.year}")
-        print(render.announce(wk), "\n\n", render.remind(wk), sep="")
+        print(render.announce(wk), "\n\n", render.remind(wk, party=True), sep="")
         return 0
 
-    tg = Telegram(dry_run=args.dry_run)
+    state = load_state()
+    before = json.dumps(state, sort_keys=True)
+
+    if args.party or args.no_party:
+        rnd = args.party or args.no_party
+        state[f"{now.year}-{rnd}-party"] = bool(args.party)
+        print(f"Сходка на этапе {rnd}: {'включена' if args.party else 'выключена'}")
+        save_state(state)
+        return 0
+
+    tg = Telegram(dry_run=args.dry_run, offset=state.get("updates_offset"))
+    messages = announce_messages(state, now.year)
+    tg.on_update = lambda u: handle_reaction(u, tg, state, now.year, messages)
 
     if args.force_announce:
         wk = next((w for w in weekends if w["round"] == args.force_announce), None)
         if not wk:
             sys.exit(f"Нет этапа {args.force_announce} в сезоне {now.year}")
         print(f"Принудительный анонс этапа {wk['round']} ({wk['event']})")
-        tg.send(render.announce(wk), pin=True)
+        message_id = tg.send(render.announce(wk), pin=True)
+        # запоминаем id, чтобы реакция на это сообщение тоже включала сходку;
+        # ключ отдельный, штатный анонс он не отменяет
+        state[f"{now.year}-{wk['round']}-manual"] = {"message_id": message_id}
+        state["updates_offset"] = tg.offset
+        if not args.dry_run:
+            save_state(state)
         return 0
 
-    state = load_state()
+    if args.watch_reactions:
+        print("Жду реакции 45 секунд...")
+        tg.pump(wait=45)
+        state["updates_offset"] = tg.offset
+        if not args.dry_run:
+            save_state(state)
+        return 0
+
+    tg.pump()          # разобрать реакции, накопившиеся с прошлого запуска
     sent = []
 
     for wk in weekends:
@@ -119,9 +215,10 @@ def main():
         due = f1data.remind_at(wk)
         # Верхняя граница — старт гонки: после него напоминание бессмысленно.
         if key not in state and due <= now < wk["gp_il"]:
-            print(f"Напоминание об этапе {rnd} ({wk['event']})")
+            party = bool(state.get(f"{year}-{rnd}-party"))
+            print(f"Напоминание об этапе {rnd} ({wk['event']}), сходка: {party}")
             state[key] = {"sent_at": now.isoformat(),
-                          "message_id": tg.send(render.remind(wk))}
+                          "message_id": tg.send(render.remind(wk, party=party))}
             sent.append(key)
 
     key = f"{now.year}-offseason"
@@ -138,11 +235,13 @@ def main():
                           "message_id": tg.send(text, pin=True)}
             sent.append(key)
 
-    if sent and not args.dry_run:
-        save_state(state)
-        print(f"Отправлено: {', '.join(sent)}")
-    elif not sent:
+    if tg.offset is not None:
+        state["updates_offset"] = tg.offset
+    if not sent:
         print(f"Нечего слать ({now:%Y-%m-%d %H:%M %Z})")
+    if json.dumps(state, sort_keys=True) != before and not args.dry_run:
+        save_state(state)
+        print(f"Состояние обновлено{': ' + ', '.join(sent) if sent else ''}")
     return 0
 
 

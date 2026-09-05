@@ -6,13 +6,21 @@ import time
 import urllib.request
 
 API = "https://api.telegram.org/bot{token}/{method}"
+# Реакции и служебные сообщения о закрепе приходят одним потоком, поэтому
+# читать его надо в одном месте: подтверждённый offset стирает всё, что было
+# раньше, и «лишний» getUpdates легко проглотил бы чужую реакцию.
+ALLOWED_UPDATES = ["message", "message_reaction"]
 
 
 class Telegram:
-    def __init__(self, token=None, chat_id=None, dry_run=False):
+    def __init__(self, token=None, chat_id=None, dry_run=False,
+                 offset=None, on_update=None):
         self.token = token or os.environ.get("TG_BOT_TOKEN", "")
         self.chat_id = chat_id or os.environ.get("TG_CHAT_ID", "")
         self.dry_run = dry_run
+        self.offset = offset          # с какого update_id читать дальше
+        self.on_update = on_update    # куда отдавать всё, что пришло
+
         missing = [name for name, value in
                    (("TG_BOT_TOKEN", self.token), ("TG_CHAT_ID", self.chat_id))
                    if not value]
@@ -21,6 +29,8 @@ class Telegram:
         if missing:
             print(f"WARNING: не заданы {' / '.join(missing)} — "
                   f"в боевом запуске это была бы ошибка")
+
+    # --- транспорт ---------------------------------------------------------
 
     def _raw(self, method, http_timeout=30, **params):
         if self.dry_run:
@@ -39,6 +49,35 @@ class Telegram:
     def _call(self, method, **params):
         return self._raw(method, chat_id=self.chat_id, **params)
 
+    # --- чтение апдейтов ---------------------------------------------------
+
+    def pump(self, wait=0, stop_when=None):
+        """Вычитать очередь апдейтов и раздать их on_update.
+
+        wait — сколько секунд Telegram держит длинный опрос, если очередь
+        пуста. stop_when опознаёт апдейт, ради которого мы пришли: пачку
+        дочитываем до конца (чтобы ничего не потерять), но дальше не ждём.
+        """
+        if self.dry_run:
+            print(f"[dry-run] getUpdates(offset={self.offset})")
+            return False
+
+        found, deadline = False, time.monotonic() + wait
+        while True:
+            updates = self._raw("getUpdates", http_timeout=wait + 25,
+                                offset=self.offset, timeout=wait,
+                                allowed_updates=ALLOWED_UPDATES)
+            for update in updates:
+                self.offset = update["update_id"] + 1
+                if stop_when is not None and stop_when(update):
+                    found = True
+                elif self.on_update is not None:
+                    self.on_update(update)
+            if found or time.monotonic() >= deadline:
+                return found
+
+    # --- отправка ----------------------------------------------------------
+
     def send(self, text, pin=False, silent=False):
         if self.dry_run:
             print("\n" + "-" * 60 + f"\n{text}\n" + "-" * 60)
@@ -52,48 +91,65 @@ class Telegram:
             self.drop_pin_notice(result["message_id"])
         return result["message_id"]
 
-    def drop_pin_notice(self, pinned_id, wait=30):
+    def drop_pin_notice(self, pinned_id, wait=25):
         """Убрать служебное «бот закрепил сообщение», которое Telegram сам
         добавляет в чат следом за закрепом.
 
-        Его id ниоткуда не возвращается, поэтому ждём его в getUpdates и
-        удаляем только то сообщение, у которого в pinned_message лежит именно
-        наш закреп: угадывать id по соседству нельзя — можно снести чужое.
+        Его id ниоткуда не возвращается, поэтому ждём его в апдейтах и удаляем
+        только то сообщение, у которого в pinned_message лежит именно наш
+        закреп: угадывать id по соседству нельзя — можно снести чужое.
         """
-        if self.dry_run:
-            print("[dry-run] удаление служебного сообщения о закрепе")
-            return True
+        notice_id = None
 
-        offset, deadline = None, time.monotonic() + wait
-        while time.monotonic() < deadline:
-            try:
-                # timeout — длинный опрос на стороне Telegram, http_timeout — наш
-                updates = self._raw("getUpdates", http_timeout=40, timeout=20,
-                                    offset=offset, allowed_updates=["message"])
-            except Exception as e:                      # noqa: BLE001
-                print(f"WARNING: не удалось прочитать апдейты ({e})")
-                return False
-            for update in updates:
-                offset = update["update_id"] + 1
-                message = update.get("message") or {}
-                pinned = message.get("pinned_message")
-                if (pinned and pinned.get("message_id") == pinned_id
-                        and str(message.get("chat", {}).get("id")) == str(self.chat_id)):
-                    try:
-                        self._raw("deleteMessage", chat_id=self.chat_id,
-                                  message_id=message["message_id"])
-                        return True
-                    except Exception as e:              # noqa: BLE001
-                        print(f"WARNING: служебное сообщение о закрепе не удалено "
-                              f"— нужно право «Удаление сообщений» ({e})")
-                        return False
-        print("WARNING: служебное сообщение о закрепе не пришло в getUpdates, "
-              "удалять нечего")
-        return False
+        def is_notice(update):
+            nonlocal notice_id
+            message = update.get("message") or {}
+            pinned = message.get("pinned_message") or {}
+            if (pinned.get("message_id") == pinned_id
+                    and str(message.get("chat", {}).get("id")) == str(self.chat_id)):
+                notice_id = message["message_id"]
+                return True
+            return False
+
+        try:
+            self.pump(wait=wait, stop_when=is_notice)
+        except Exception as e:                              # noqa: BLE001
+            print(f"WARNING: не удалось прочитать апдейты ({e})")
+            return False
+
+        if notice_id is None:
+            print("WARNING: служебное сообщение о закрепе не пришло, удалять нечего")
+            return False
+        try:
+            self._raw("deleteMessage", chat_id=self.chat_id, message_id=notice_id)
+            return True
+        except Exception as e:                              # noqa: BLE001
+            print(f"WARNING: служебное сообщение о закрепе не удалено — "
+                  f"нужно право «Удаление сообщений» ({e})")
+            return False
+
+    def unpin_all(self):
+        self._call("unpinAllChatMessages")
+
+    # --- диагностика -------------------------------------------------------
+
+    def member_status(self, user_id):
+        """creator / administrator / member / left / kicked."""
+        return self._call("getChatMember", user_id=user_id).get("status")
+
+    def test_pin(self):
+        """Полный цикл закрепа на одноразовом сообщении: отправить, закрепить,
+        убрать служебную надпись, открепить и удалить за собой. В чате остаётся
+        только мелькнувшее сообщение."""
+        message_id = self.send("🔧 Проверка закрепа — сообщение сейчас исчезнет.",
+                               pin=True, silent=True)
+        self._call("unpinChatMessage", message_id=message_id)
+        self._raw("deleteMessage", chat_id=self.chat_id, message_id=message_id)
+        print("Тестовое сообщение откреплено и удалено.")
 
     def check(self):
         """Проверка боем без единого сообщения в группу: жив ли токен, виден
-        ли чат и выдано ли право на закреп."""
+        ли чат и выданы ли права."""
         me = self._call("getMe")
         print(f"Бот: @{me.get('username')} (id {me.get('id')})")
 
@@ -117,19 +173,6 @@ class Telegram:
         if chat.get("type") not in ("group", "supergroup"):
             return f"Это не групповой чат, а {chat.get('type')}"
         return None
-
-    def test_pin(self):
-        """Полный цикл закрепа на одноразовом сообщении: отправить, закрепить,
-        убрать служебную надпись, открепить и удалить за собой. В чате остаётся
-        только мелькнувшее сообщение."""
-        message_id = self.send("🔧 Проверка закрепа — сообщение сейчас исчезнет.",
-                               pin=True, silent=True)
-        self._call("unpinChatMessage", message_id=message_id)
-        self._raw("deleteMessage", chat_id=self.chat_id, message_id=message_id)
-        print("Тестовое сообщение откреплено и удалено.")
-
-    def unpin_all(self):
-        self._call("unpinAllChatMessages")
 
 
 def find_chats(token=None):
