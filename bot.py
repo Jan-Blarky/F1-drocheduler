@@ -165,7 +165,7 @@ def main():
         wk = next((w for w in weekends if w["round"] == args.preview), None)
         if not wk:
             sys.exit(f"Нет этапа {args.preview} в сезоне {now.year}")
-        print(render.announce(wk), "\n\n", render.remind(wk, party=True), sep="")
+        print(render.announce(wk), "\n\n", render.remind(wk, party=True, now=now), sep="")
         return 0
 
     state = load_state()
@@ -225,7 +225,7 @@ def main():
             party = bool(state.get(f"{year}-{rnd}-party"))
             print(f"Напоминание об этапе {rnd} ({wk['event']}), сходка: {party}")
             state[key] = {"sent_at": now.isoformat(),
-                          "message_id": tg.send(render.remind(wk, party=party))}
+                          "message_id": tg.send(render.remind(wk, party=party, now=now))}
             sent.append(key)
 
     key = f"{now.year}-offseason"
