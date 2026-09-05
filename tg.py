@@ -151,10 +151,11 @@ class Telegram:
         """Проверка боем без единого сообщения в группу: жив ли токен, виден
         ли чат и выданы ли права."""
         me = self._call("getMe")
-        print(f"Бот: @{me.get('username')} (id {me.get('id')})")
+        print(f"Бот: id {me.get('id')}")
 
+        # название группы в публичный лог Actions не пишем
         chat = self._call("getChat")
-        print(f"Чат: {chat.get('title')!r}, тип {chat.get('type')}, id {chat.get('id')}")
+        print(f"Чат: тип {chat.get('type')}")
 
         member = self._call("getChatMember", user_id=me["id"])
         status = member.get("status")

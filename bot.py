@@ -60,6 +60,11 @@ def is_party_reaction(reactions):
     return False
 
 
+def emoji_ids(reactions):
+    """Компактное описание реакций для лога — без сведений об авторе."""
+    return [r.get("custom_emoji_id") or r.get("emoji") for r in reactions or []]
+
+
 def announce_messages(state, year):
     """message_id анонса -> номер этапа. Учитываются и штатные анонсы, и
     отправленные вручную через --force-announce."""
@@ -82,9 +87,10 @@ def handle_reaction(update, tg, state, year, messages):
     user = reaction.get("user") or {}
     old, new = reaction.get("old_reaction"), reaction.get("new_reaction")
     message_id = reaction.get("message_id")
-    # печатаем всегда: так из лога Actions видно custom_emoji_id новой реакции
-    print(f"Реакция на сообщение {message_id} от {user.get('id')} "
-          f"({user.get('first_name')}): было {old}, стало {new}")
+    # Логи публичного репозитория видны всем, поэтому пишем только эмодзи:
+    # id и имя автора реакции туда попадать не должны.
+    print(f"Реакция на сообщение {message_id}: "
+          f"было {emoji_ids(old)}, стало {emoji_ids(new)}")
 
     rnd = messages.get(message_id)
     if rnd is None:
@@ -103,6 +109,7 @@ def handle_reaction(update, tg, state, year, messages):
     if status != "creator":
         print(f"  — реакция не от владельца группы (статус {status}), пропускаем")
         return
+
 
     state[f"{year}-{rnd}-party"] = wants
     print(f"  — сходка на этапе {rnd}: {'включена' if wants else 'выключена'}")
